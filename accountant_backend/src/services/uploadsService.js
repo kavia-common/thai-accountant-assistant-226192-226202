@@ -39,14 +39,20 @@ class UploadsService {
       params.push(uploadType);
     }
 
+    // NOTE: Some MySQL deployments (and/or driver settings) reject binding LIMIT/OFFSET
+    // with prepared statements (ER_WRONG_ARGUMENTS). To keep compatibility, we inline
+    // numeric values after coercion + bounds checking.
+    const safeLimit = Math.max(1, Math.min(200, Number(limit) || 50));
+    const safeOffset = Math.max(0, Number(offset) || 0);
+
     const rows = await query(
       `SELECT id, upload_type, original_filename, mime_type, file_size_bytes, upload_time, status, error_message
        FROM uploads
        ${where}
        ORDER BY upload_time DESC
-       LIMIT ?
-       OFFSET ?`,
-      [...params, Number(limit), Number(offset)]
+       LIMIT ${safeLimit}
+       OFFSET ${safeOffset}`,
+      params
     );
 
     return rows;

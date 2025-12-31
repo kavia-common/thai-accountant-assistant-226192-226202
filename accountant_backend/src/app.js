@@ -27,7 +27,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.set('trust proxy', true);
 
-app.use('/docs', swaggerUi.serve, (req, res, next) => {
+function buildDynamicSwaggerSpec(req) {
   const host = req.get('host'); // may or may not include port
   let protocol = req.protocol; // http or https
 
@@ -41,7 +41,7 @@ app.use('/docs', swaggerUi.serve, (req, res, next) => {
   const fullHost = needsPort ? `${host}:${actualPort}` : host;
   protocol = req.secure ? 'https' : protocol;
 
-  const dynamicSpec = {
+  return {
     ...swaggerSpec,
     servers: [
       {
@@ -49,6 +49,14 @@ app.use('/docs', swaggerUi.serve, (req, res, next) => {
       },
     ],
   };
+}
+
+app.get('/openapi.json', (req, res) => {
+  res.json(buildDynamicSwaggerSpec(req));
+});
+
+app.use('/docs', swaggerUi.serve, (req, res, next) => {
+  const dynamicSpec = buildDynamicSwaggerSpec(req);
   swaggerUi.setup(dynamicSpec)(req, res, next);
 });
 
