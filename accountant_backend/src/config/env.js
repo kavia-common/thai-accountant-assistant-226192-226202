@@ -23,6 +23,42 @@ function parseCsv(value, defaultValue = []) {
     .filter(Boolean);
 }
 
+function parseMysqlFromEnv() {
+  const rawUrl = process.env.MYSQL_URL || 'localhost';
+
+  // Supports either:
+  //  - hostname (e.g., "localhost" or "db")
+  //  - full URI (e.g., "mysql://localhost:5000/myapp")
+  // If URI is provided, it can optionally override host/port/db (unless explicit env vars exist).
+  let host = rawUrl;
+  let port = process.env.MYSQL_PORT ? Number(process.env.MYSQL_PORT) : undefined;
+  let database = process.env.MYSQL_DB;
+
+  if (/^mysql:\/\//i.test(rawUrl)) {
+    try {
+      const u = new URL(rawUrl);
+      host = u.hostname;
+
+      // Only take from URL when explicit env vars are not present
+      if (!port && u.port) port = Number(u.port);
+      if (!database && u.pathname && u.pathname !== '/') {
+        database = u.pathname.replace(/^\//, '');
+      }
+    } catch (_e) {
+      // If MYSQL_URL is malformed, keep it as-is; pool.js will surface a clear error.
+      host = rawUrl;
+    }
+  }
+
+  return {
+    host,
+    user: process.env.MYSQL_USER,
+    password: process.env.MYSQL_PASSWORD,
+    database,
+    port,
+  };
+}
+
 const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 3001),
@@ -51,16 +87,7 @@ const config = {
     maxAge: Number(process.env.CORS_MAX_AGE || 3600),
   },
 
-  mysql: {
-    // IMPORTANT: these are the required DB env vars from the database container definition.
-    // Please ensure these are set in accountant_backend/.env by the orchestrator:
-    // MYSQL_URL, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB, MYSQL_PORT
-    host: process.env.MYSQL_URL || 'localhost',
-    user: process.env.MYSQL_USER,
-    password: process.env.MYSQL_PASSWORD,
-    database: process.env.MYSQL_DB,
-    port: process.env.MYSQL_PORT ? Number(process.env.MYSQL_PORT) : undefined,
-  },
+  mysql: parseMysqlFromEnv(),
 
   ai: {
     // When false/missing -> fall back to heuristic classification
